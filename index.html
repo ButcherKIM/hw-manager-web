@@ -58,7 +58,7 @@
         </div>
     </div>
     
-    <script>
+    <script>window.onerror = function(msg, url, lineNo, columnNo, error) { document.getElementById("pc-list").innerHTML += "<div style=\"color:red\">ERROR: " + msg + " line: " + lineNo + "</div>"; return false; }; window.onunhandledrejection = function(event) { document.getElementById("pc-list").innerHTML += "<div style=\"color:red\">PROMISE ERROR: " + event.reason + "</div>"; };
         const firebaseConfig = { apiKey: "AIzaSyB9ZhAwFkfqsWF05m5_vhlo_gD4CF6dx-k", authDomain: "hwmnt-80bdd.firebaseapp.com", databaseURL: "https://hwmnt-80bdd-default-rtdb.asia-southeast1.firebasedatabase.app", projectId: "hwmnt-80bdd", storageBucket: "hwmnt-80bdd.firebasestorage.app", messagingSenderId: "820080608586", appId: "1:820080608586:web:075217fe2da44b22be2db3", measurementId: "G-M2EH1R9BLW" };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
@@ -298,3 +298,4 @@
     </script>
 </body>
 </html>
+
