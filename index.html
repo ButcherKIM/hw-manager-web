@@ -224,6 +224,7 @@
                                     </h2>
                                     <div class="flex items-center gap-2 mb-2 ml-6 md:ml-7">
                                         <span id="badge_${pcId}" class="px-2 py-0.5 text-[11px] font-normal rounded-md ${statusBg} ${statusTextColor}">${statusText}</span>
+                                        <span id="time_${pcId}" class="text-xs text-gray-400 font-mono"></span>
                                     </div>
                                     <div class="text-sm font-mono text-gray-500 ml-6 md:ml-7">
                                         IP: ${pcData.ip_address}<br>MAC: ${pcData.mac_address}
@@ -323,14 +324,39 @@
             const toggleSpan = document.getElementById(`toggle_${pcId}`);
             if (contentDiv.style.display === 'none') {
                 contentDiv.style.display = 'block';
-                toggleSpan.innerText = '▲';
+                toggleSpan.innerText = '▼';
                 localStorage.setItem('collapsed_' + pcId, 'false');
             } else {
                 contentDiv.style.display = 'none';
-                toggleSpan.innerText = '▼';
+                toggleSpan.innerText = '▶';
                 localStorage.setItem('collapsed_' + pcId, 'true');
             }
         }
+
+        setInterval(() => {
+            const now = new Date().getTime();
+            for (const pcId in window.pcDataStore) {
+                const pcData = window.pcDataStore[pcId];
+                const lastSeenTime = new Date(pcData.last_seen).getTime();
+                const diffSec = Math.floor((now - lastSeenTime) / 1000);
+                
+                let timeText = '';
+                if (diffSec < 5) timeText = '방금 전 업데이트';
+                else if (diffSec < 60) timeText = `${diffSec}초 전 업데이트`;
+                else if (diffSec < 3600) timeText = `${Math.floor(diffSec/60)}분 전 업데이트`;
+                else timeText = `${Math.floor(diffSec/3600)}시간 전 업데이트`;
+
+                const timeEl = document.getElementById(`time_${pcId}`);
+                if (timeEl) timeEl.innerText = timeText;
+
+                const isOnline = diffSec < 30;
+                const badgeEl = document.getElementById(`badge_${pcId}`);
+                if (badgeEl) {
+                    badgeEl.className = `px-2 py-0.5 text-[11px] font-normal rounded-md ${isOnline ? 'bg-[#E5F9E7] text-[#248A3D]' : 'bg-[#FFEBEA] text-[#C5221F]'}`;
+                    badgeEl.innerText = isOnline ? '온라인' : '오프라인';
+                }
+            }
+        }, 1000);
     </script>
 </body>
 </html>
