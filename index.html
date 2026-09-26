@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HW MANAGER</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href='data:application/manifest+json,{"name":"HW Manager","short_name":"HW Manager","display":"standalone","start_url":".","background_color":"#F2F2F7","theme_color":"#F2F2F7"}'>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+    <style>
+        body { 
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', sans-serif; 
+            background-color: #F2F2F7; 
+            color: #1C1C1E; 
+            -webkit-font-smoothing: antialiased; 
+            padding-top: env(safe-area-inset-top); 
+        }
+        .ios-card { 
+            background-color: #FFFFFF; 
+            border-radius: 24px; 
+            box-shadow: 0 4px 24px rgba(0,0,0,0.04); 
+            transition: transform 0.2s ease; 
+        }
+        
+        .btn-sleep { background-color: #3B82F6; color: white; font-weight: normal; }
+        .btn-sleep:active { background-color: #2563EB; }
+        .btn-reboot { background-color: #EAB308; color: white; font-weight: normal; }
+        .btn-reboot:active { background-color: #CA8A04; }
+        .btn-shutdown { background-color: #EF4444; color: white; font-weight: normal; }
+        .btn-shutdown:active { background-color: #DC2626; }
+        
+        .glass-header { 
+            background: rgba(242, 242, 247, 0.75); 
+            backdrop-filter: blur(20px); 
+            -webkit-backdrop-filter: blur(20px); 
+            position: sticky; top: 0; z-index: 50; 
+        }
+        .disk-track { background-color: #E5E5EA; border-radius: 9999px; overflow: hidden; height: 6px; }
+        .disk-fill { background-color: #007AFF; height: 100%; border-radius: 9999px; }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+
+</head>
+<body class="p-4 md:p-8">
+    <div class="glass-header -mx-4 -mt-4 px-6 py-4 mb-6 md:-mx-8 md:-mt-8 md:px-10 border-b border-[#E5E5EA]">
+        <h1 class="text-3xl font-semibold text-[#1C1C1E]">HW MANAGER</h1>
+    </div>
+
+    <div class="max-w-5xl mx-auto">
+        <div id="pc-list" class="space-y-6">
+            <p id="loading-msg" class="text-[#8E8E93] animate-pulse text-center mt-10">데이터를 동기화하는 중...</p>
+        </div>
+    </div>
+    
+    <script>
+        const firebaseConfig = { apiKey: "AIzaSyB9ZhAwFkfqsWF05m5_vhlo_gD4CF6dx-k", authDomain: "hwmnt-80bdd.firebaseapp.com", databaseURL: "https://hwmnt-80bdd-default-rtdb.asia-southeast1.firebasedatabase.app", projectId: "hwmnt-80bdd", storageBucket: "hwmnt-80bdd.firebasestorage.app", messagingSenderId: "820080608586", appId: "1:820080608586:web:075217fe2da44b22be2db3", measurementId: "G-M2EH1R9BLW" };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        const pcListDiv = document.getElementById('pc-list');
+        const MAX_POINTS = 360;
+        window.pcDataStore = {};
+
+        function getCommonOptions(maxVal) {
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                layout: {
+                    padding: { left: 0, right: 0, top: 0, bottom: 0 }
+                },
+                elements: {
+                    point: { radius: 0 },
+                    line: { borderWidth: 1, tension: 0 } 
+                },
+                scales: {
+                    x: { 
+                        display: true, 
+                        grid: { display: false }, 
+                        ticks: { display: false }, 
+                        border: { display: true, color: '#000000', width: 1.5 } 
+                    },
+                    x2: { 
+                        position: 'top', 
+                        display: true, 
+                        grid: { display: false }, 
+                        ticks: { display: false }, 
+                        border: { display: true, color: '#000000', width: 1.5 } 
+                    },
+                    y: { 
+                        min: 0, 
+                        max: maxVal,
+                        grid: { display: false },
+                        border: { display: true, color: '#000000', width: 1.5 }, 
+                        afterFit: function(scaleInstance) {
+                            scaleInstance.width = 45; // 축 너비를 45px로 완벽히 고정 (모든 그래프 동일화)
+                        },
+                        ticks: { 
+                            stepSize: maxVal / 2, 
+                            color: '#000000', 
+                            font: { size: 16, weight: 'normal', family: 'Pretendard' }, 
+                            padding: 4
+                        }
+                    },
+                    y2: { 
+                        position: 'right', 
+                        display: true, 
+                        grid: { display: false }, 
+                        ticks: { display: false }, 
+                        border: { display: true, color: '#000000', width: 1.5 } 
+                    }
+                },
+                plugins: { legend: { display: false }, tooltip: { enabled: false } }
+            };
+        }
+
+        function initChartsForPC(pcId) {
+            const cpuCtx = document.getElementById(`cpuChart_${pcId}`).getContext('2d');
+            const ramCtx = document.getElementById(`ramChart_${pcId}`).getContext('2d');
+            const netCtx = document.getElementById(`netChart_${pcId}`).getContext('2d');
+
+            const cpuChart = new Chart(cpuCtx, {
+                type: 'line',
+                data: { labels: [], datasets: [{ data: [], borderColor: '#007AFF', fill: false }] },
+                options: getCommonOptions(100)
+            });
+
+            const ramChart = new Chart(ramCtx, {
+                type: 'line',
+                data: { labels: [], datasets: [{ data: [], borderColor: '#AF52DE', fill: false }] },
+                options: getCommonOptions(32)
+            });
+
+            const netChart = new Chart(netCtx, {
+                type: 'line',
+                data: { 
+                    labels: [], 
+                    datasets: [
+                        { data: [], borderColor: '#34C759', fill: false },
+                        { data: [], borderColor: '#FF9500', fill: false }
+                    ]
+                },
+                options: getCommonOptions(100)
+            });
+
+            db.ref(`pc_history/${pcId}`).on('value', (snapshot) => {
+                const historyData = snapshot.val();
+                const labels = new Array(MAX_POINTS).fill('');
+                let cpu = [], ram = [], netUp = [], netDown = [];
+                
+                const pcInfo = window.pcDataStore[pcId];
+                const totalGb = pcInfo ? pcInfo.hardware.ram_total_gb : 32;
+
+                if (historyData) {
+                    const sortedKeys = Object.keys(historyData).sort().slice(-MAX_POINTS);
+                    sortedKeys.forEach(ts => {
+                        cpu.push(historyData[ts].cpu);
+                        ram.push((historyData[ts].ram / 100) * totalGb);
+                        netUp.push(historyData[ts].netUp / 1000);
+                        netDown.push(historyData[ts].netDown / 1000);
+                    });
+                }
+
+                const padArray = (arr) => {
+                    const res = new Array(MAX_POINTS).fill(null);
+                    if (arr.length > 0) res.splice(MAX_POINTS - arr.length, arr.length, ...arr);
+                    return res;
+                };
+
+                const ceilRam = Math.ceil(totalGb);
+                ramChart.options.scales.y.max = ceilRam;
+                ramChart.options.scales.y.ticks.stepSize = ceilRam / 2;
+
+                cpuChart.data.labels = labels; cpuChart.data.datasets[0].data = padArray(cpu); cpuChart.update();
+                ramChart.data.labels = labels; ramChart.data.datasets[0].data = padArray(ram); ramChart.update();
+                netChart.data.labels = labels; netChart.data.datasets[0].data = padArray(netUp); netChart.data.datasets[1].data = padArray(netDown); netChart.update();
+            });
+        }
+
+        db.ref('pc_status').on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (!data) return;
+
+            if (document.getElementById('loading-msg')) document.getElementById('loading-msg').remove();
+
+            for (const [pcId, pcData] of Object.entries(data)) {
+                window.pcDataStore[pcId] = pcData;
+                
+                const lastSeenTime = new Date(pcData.last_seen).getTime();
+                const now = new Date().getTime();
+                const isOnline = (now - lastSeenTime) < 30000;
+                const statusText = isOnline ? '온라인' : '오프라인';
+                const statusBg = isOnline ? 'bg-[#E5F9E7]' : 'bg-[#FFEBEA]';
+                const statusTextColor = isOnline ? 'text-[#248A3D]' : 'text-[#C5221F]';
+                
+                if (!document.getElementById(`card_${pcId}`)) {
+                    const cardHTML = `
+                        <div id="card_${pcId}" class="ios-card p-5 md:p-7 mb-6">
+                            
+                            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                                <div class="mb-4 md:mb-0">
+                                    <h2 class="text-2xl font-semibold text-[#1C1C1E] mb-1">${pcData.name}</h2>
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <span id="badge_${pcId}" class="px-2 py-0.5 text-[11px] font-normal rounded-md ${statusBg} ${statusTextColor}">${statusText}</span>
+                                    </div>
+                                    <div class="text-sm font-mono text-gray-500">
+                                        IP: ${pcData.ip_address} | MAC: ${pcData.mac_address}
+                                    </div>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="sendCommand('${pcId}', 'SLEEP')" class="btn-sleep px-4 py-2 rounded shadow-sm text-sm">절전</button>
+                                    <button onclick="sendCommand('${pcId}', 'REBOOT')" class="btn-reboot px-4 py-2 rounded shadow-sm text-sm">재부팅</button>
+                                    <button onclick="sendCommand('${pcId}', 'SHUTDOWN')" class="btn-shutdown px-4 py-2 rounded shadow-sm text-sm">종료</button>
+                                </div>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                                <div class="bg-[#F2F2F7] rounded-xl pt-3 pb-2 px-2">
+                                    <div class="flex justify-between items-center mb-2 px-1">
+                                        <span class="text-xl font-medium text-black tracking-tight">CPU</span>
+                                        <span id="cpu_text_${pcId}" class="text-xl font-medium text-black tracking-tight"></span>
+                                    </div>
+                                    <div class="h-32 w-full"><canvas id="cpuChart_${pcId}"></canvas></div>
+                                </div>
+                                
+                                <div class="bg-[#F2F2F7] rounded-xl pt-3 pb-2 px-2">
+                                    <div class="flex justify-between items-center mb-2 px-1">
+                                        <span class="text-xl font-medium text-black tracking-tight">메모리</span>
+                                        <span id="ram_text_${pcId}" class="text-xl font-medium text-black tracking-tight"></span>
+                                    </div>
+                                    <div class="h-32 w-full"><canvas id="ramChart_${pcId}"></canvas></div>
+                                </div>
+                                
+                                <div class="bg-[#F2F2F7] rounded-xl pt-3 pb-2 px-2">
+                                    <div class="flex justify-between items-center mb-2 px-1">
+                                        <span class="text-xl font-medium text-black tracking-tight">네트워크</span>
+                                        <span id="net_text_${pcId}" class="text-xl font-medium text-black tracking-tight"></span>
+                                    </div>
+                                    <div class="h-32 w-full"><canvas id="netChart_${pcId}"></canvas></div>
+                                </div>
+                            </div>
+
+                            <div class="mt-6 px-1" id="disk_${pcId}"></div>
+                        </div>
+                    `;
+                    pcListDiv.insertAdjacentHTML('beforeend', cardHTML);
+                    initChartsForPC(pcId);
+                }
+
+                document.getElementById(`badge_${pcId}`).className = `px-2 py-0.5 text-[11px] font-normal rounded-md ${statusBg} ${statusTextColor}`;
+                document.getElementById(`badge_${pcId}`).innerText = statusText;
+                
+                document.getElementById(`cpu_text_${pcId}`).innerText = `${pcData.hardware.cpu_usage_percent}%`;
+                
+                const ramTotal = pcData.hardware.ram_total_gb;
+                const ramUsed = (pcData.hardware.ram_usage_percent / 100) * ramTotal;
+                document.getElementById(`ram_text_${pcId}`).innerText = `${ramUsed.toFixed(1)}GB`;
+                
+                const netUpMbps = pcData.network.upload_kbps / 1000;
+                const netDownMbps = pcData.network.download_kbps / 1000;
+                const totalMbps = netUpMbps + netDownMbps;
+                document.getElementById(`net_text_${pcId}`).innerText = `${totalMbps.toFixed(1)} Mbps`;
+
+                let diskHTML = '';
+                if (pcData.drives) {
+                    diskHTML = '<div class="space-y-4">';
+                    diskHTML += pcData.drives.map(drive => `
+                        <div class="flex items-center gap-4">
+                            <span class="text-sm font-medium text-[#1C1C1E] w-4">${drive.letter}</span>
+                            <div class="flex-grow disk-track">
+                                <div class="disk-fill" style="width: ${drive.usage_percent}%"></div>
+                            </div>
+                            <span class="text-xs font-normal text-[#8E8E93] w-20 text-right">${drive.free_gb}GB 남음</span>
+                        </div>
+                    `).join('');
+                    diskHTML += '</div>';
+                }
+                document.getElementById(`disk_${pcId}`).innerHTML = diskHTML;
+            }
+        });
+
+        window.sendCommand = function(pcId, commandStr) {
+            let cmdName = commandStr === 'SLEEP' ? '절전 모드로 전환' : (commandStr === 'REBOOT' ? '재부팅' : '종료');
+            if(confirm(`정말 이 PC를 ${cmdName}하시겠습니까?`)) {
+                db.ref(`commands/${pcId}`).push().set({
+                    command: commandStr,
+                    status: 'PENDING',
+                    created_at: new Date().toISOString()
+                }).catch((error) => alert('오류가 발생했습니다: ' + error.message));
+            }
+        }
+    </script>
+</body>
+</html>
