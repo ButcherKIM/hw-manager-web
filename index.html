@@ -224,7 +224,7 @@
                                     </h2>
                                     <div class="flex items-center gap-2 mb-2 ml-6 md:ml-7">
                                         <span id="badge_${pcId}" class="px-2 py-0.5 text-[11px] font-normal rounded-md ${statusBg} ${statusTextColor}">${statusText}</span>
-                                        <span id="time_${pcId}" class="text-xs text-gray-400 font-mono"></span>
+                                        <span class="text-[11px] text-gray-400 bg-gray-100 px-2 py-0.5 rounded-md">${pcData.update_interval || 10}초 간격</span>
                                     </div>
                                     <div class="text-sm font-mono text-gray-500 ml-6 md:ml-7">
                                         IP: ${pcData.ip_address}<br>MAC: ${pcData.mac_address}
@@ -340,15 +340,6 @@
                 const lastSeenTime = new Date(pcData.last_seen).getTime();
                 const diffSec = Math.floor((now - lastSeenTime) / 1000);
                 
-                let timeText = '';
-                if (diffSec < 5) timeText = '방금 전 업데이트';
-                else if (diffSec < 60) timeText = `${diffSec}초 전 업데이트`;
-                else if (diffSec < 3600) timeText = `${Math.floor(diffSec/60)}분 전 업데이트`;
-                else timeText = `${Math.floor(diffSec/3600)}시간 전 업데이트`;
-
-                const timeEl = document.getElementById(`time_${pcId}`);
-                if (timeEl) timeEl.innerText = timeText;
-
                 const isOnline = diffSec < 30;
                 const badgeEl = document.getElementById(`badge_${pcId}`);
                 if (badgeEl) {
