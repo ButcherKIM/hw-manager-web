@@ -199,54 +199,70 @@
                 const statusBg = isOnline ? 'bg-[#E5F9E7]' : 'bg-[#FFEBEA]';
                 const statusTextColor = isOnline ? 'text-[#248A3D]' : 'text-[#C5221F]';
                 
+                let batteryHTML = '';
+                if (pcData.hardware && pcData.hardware.battery) {
+                    const bat = pcData.hardware.battery;
+                    const plugIcon = bat.power_plugged ? '⚡' : '🔋';
+                    batteryHTML = `<span class="text-base text-gray-500 font-normal ml-2">${plugIcon} ${Math.round(bat.percent)}%</span>`;
+                }
+
+                const isCollapsed = localStorage.getItem('collapsed_' + pcId) === 'true';
+                const contentDisplay = isCollapsed ? 'none' : 'block';
+                const toggleIcon = isCollapsed ? '▼' : '▲';
+
                 if (!document.getElementById(`card_${pcId}`)) {
                     const cardHTML = `
                         <div id="card_${pcId}" class="ios-card p-5 md:p-7 mb-6">
                             
-                            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 cursor-pointer" onclick="toggleCard('${pcId}')">
                                 <div class="mb-4 md:mb-0">
-                                    <h2 class="text-2xl font-semibold text-[#1C1C1E] mb-1">${pcData.name}</h2>
+                                    <h2 class="text-2xl font-semibold text-[#1C1C1E] mb-1 flex items-baseline">
+                                        ${pcData.name} <span id="battery_${pcId}">${batteryHTML}</span>
+                                    </h2>
                                     <div class="flex items-center gap-2 mb-2">
                                         <span id="badge_${pcId}" class="px-2 py-0.5 text-[11px] font-normal rounded-md ${statusBg} ${statusTextColor}">${statusText}</span>
                                     </div>
                                     <div class="text-sm font-mono text-gray-500">
-                                        IP: ${pcData.ip_address} | MAC: ${pcData.mac_address}
+                                        IP: ${pcData.ip_address}<br>MAC: ${pcData.mac_address}
                                     </div>
                                 </div>
-                                <div class="flex gap-2">
+                                <div class="flex gap-2 items-center" onclick="event.stopPropagation()">
                                     <button onclick="sendCommand('${pcId}', 'SLEEP')" class="btn-sleep px-4 py-2 rounded shadow-sm text-sm">절전</button>
                                     <button onclick="sendCommand('${pcId}', 'REBOOT')" class="btn-reboot px-4 py-2 rounded shadow-sm text-sm">재부팅</button>
                                     <button onclick="sendCommand('${pcId}', 'SHUTDOWN')" class="btn-shutdown px-4 py-2 rounded shadow-sm text-sm">종료</button>
+                                    <span id="toggle_${pcId}" class="ml-2 text-gray-400 text-xl cursor-pointer p-2">${toggleIcon}</span>
                                 </div>
                             </div>
                             
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
-                                <div class="bg-[#F2F2F7] rounded-xl pt-3 pb-2 px-2">
-                                    <div class="flex justify-between items-center mb-2 px-1">
-                                        <span class="text-xl font-medium text-black tracking-tight">CPU</span>
-                                        <span id="cpu_text_${pcId}" class="text-xl font-medium text-black tracking-tight"></span>
+                            <div id="content_${pcId}" style="display: ${contentDisplay}">
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
+                                    <div class="bg-[#F2F2F7] rounded-xl pt-3 pb-2 px-2">
+                                        <div class="flex justify-between items-center mb-2 px-1">
+                                            <span class="text-xl font-medium text-black tracking-tight">CPU</span>
+                                            <span id="cpu_text_${pcId}" class="text-xl font-medium text-black tracking-tight"></span>
+                                        </div>
+                                        <div class="h-32 w-full"><canvas id="cpuChart_${pcId}"></canvas></div>
                                     </div>
-                                    <div class="h-32 w-full"><canvas id="cpuChart_${pcId}"></canvas></div>
-                                </div>
-                                
-                                <div class="bg-[#F2F2F7] rounded-xl pt-3 pb-2 px-2">
-                                    <div class="flex justify-between items-center mb-2 px-1">
-                                        <span class="text-xl font-medium text-black tracking-tight">메모리</span>
-                                        <span id="ram_text_${pcId}" class="text-xl font-medium text-black tracking-tight"></span>
+                                    
+                                    <div class="bg-[#F2F2F7] rounded-xl pt-3 pb-2 px-2">
+                                        <div class="flex justify-between items-center mb-2 px-1">
+                                            <span class="text-xl font-medium text-black tracking-tight">메모리</span>
+                                            <span id="ram_text_${pcId}" class="text-xl font-medium text-black tracking-tight"></span>
+                                        </div>
+                                        <div class="h-32 w-full"><canvas id="ramChart_${pcId}"></canvas></div>
                                     </div>
-                                    <div class="h-32 w-full"><canvas id="ramChart_${pcId}"></canvas></div>
-                                </div>
-                                
-                                <div class="bg-[#F2F2F7] rounded-xl pt-3 pb-2 px-2">
-                                    <div class="flex justify-between items-center mb-2 px-1">
-                                        <span class="text-xl font-medium text-black tracking-tight">네트워크</span>
-                                        <span id="net_text_${pcId}" class="text-xl font-medium text-black tracking-tight"></span>
+                                    
+                                    <div class="bg-[#F2F2F7] rounded-xl pt-3 pb-2 px-2">
+                                        <div class="flex justify-between items-center mb-2 px-1">
+                                            <span class="text-xl font-medium text-black tracking-tight">네트워크</span>
+                                            <span id="net_text_${pcId}" class="text-xl font-medium text-black tracking-tight"></span>
+                                        </div>
+                                        <div class="h-32 w-full"><canvas id="netChart_${pcId}"></canvas></div>
                                     </div>
-                                    <div class="h-32 w-full"><canvas id="netChart_${pcId}"></canvas></div>
                                 </div>
-                            </div>
 
-                            <div class="mt-6 px-1" id="disk_${pcId}"></div>
+                                <div class="mt-6 px-1" id="disk_${pcId}"></div>
+                            </div>
                         </div>
                     `;
                     pcListDiv.insertAdjacentHTML('beforeend', cardHTML);
@@ -256,6 +272,10 @@
                 document.getElementById(`badge_${pcId}`).className = `px-2 py-0.5 text-[11px] font-normal rounded-md ${statusBg} ${statusTextColor}`;
                 document.getElementById(`badge_${pcId}`).innerText = statusText;
                 
+                if (document.getElementById(`battery_${pcId}`)) {
+                    document.getElementById(`battery_${pcId}`).innerHTML = batteryHTML;
+                }
+
                 document.getElementById(`cpu_text_${pcId}`).innerText = `${pcData.hardware.cpu_usage_percent}%`;
                 
                 const ramTotal = pcData.hardware.ram_total_gb;
@@ -293,6 +313,20 @@
                     status: 'PENDING',
                     created_at: new Date().toISOString()
                 }).catch((error) => alert('오류가 발생했습니다: ' + error.message));
+            }
+        }
+
+        window.toggleCard = function(pcId) {
+            const contentDiv = document.getElementById(`content_${pcId}`);
+            const toggleSpan = document.getElementById(`toggle_${pcId}`);
+            if (contentDiv.style.display === 'none') {
+                contentDiv.style.display = 'block';
+                toggleSpan.innerText = '▲';
+                localStorage.setItem('collapsed_' + pcId, 'false');
+            } else {
+                contentDiv.style.display = 'none';
+                toggleSpan.innerText = '▼';
+                localStorage.setItem('collapsed_' + pcId, 'true');
             }
         }
     </script>
