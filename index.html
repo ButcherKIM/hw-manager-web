@@ -149,23 +149,25 @@
                 options: getCommonOptions(100)
             });
 
-            db.ref(`pc_history/${pcId}`).on('value', (snapshot) => {
-                const historyData = snapshot.val();
+            const historyMap = {};
+            let lastSeenTs = null;
+            let updateFrameId = null;
+
+            function renderChartsFromMap() {
+                const sortedKeys = Object.keys(historyMap).sort().slice(-MAX_POINTS);
                 const labels = new Array(MAX_POINTS).fill('');
                 let cpu = [], ram = [], netUp = [], netDown = [];
                 
                 const pcInfo = window.pcDataStore[pcId];
-                const totalGb = pcInfo ? pcInfo.hardware.ram_total_gb : 32;
+                const totalGb = pcInfo && pcInfo.hardware ? pcInfo.hardware.ram_total_gb : 32;
 
-                if (historyData) {
-                    const sortedKeys = Object.keys(historyData).sort().slice(-MAX_POINTS);
-                    sortedKeys.forEach(ts => {
-                        cpu.push(historyData[ts].cpu);
-                        ram.push((historyData[ts].ram / 100) * totalGb);
-                        netUp.push(historyData[ts].netUp / 1000);
-                        netDown.push(historyData[ts].netDown / 1000);
-                    });
-                }
+                sortedKeys.forEach(ts => {
+                    const item = historyMap[ts];
+                    cpu.push(item.cpu);
+                    ram.push((item.ram / 100) * totalGb);
+                    netUp.push(item.netUp / 1000);
+                    netDown.push(item.netDown / 1000);
+                });
 
                 const padArray = (arr) => {
                     const res = new Array(MAX_POINTS).fill(null);
@@ -180,6 +182,78 @@
                 cpuChart.data.labels = labels; cpuChart.data.datasets[0].data = padArray(cpu); cpuChart.update();
                 ramChart.data.labels = labels; ramChart.data.datasets[0].data = padArray(ram); ramChart.update();
                 netChart.data.labels = labels; netChart.data.datasets[0].data = padArray(netUp); netChart.data.datasets[1].data = padArray(netDown); netChart.update();
+            }
+
+            function scheduleChartRender() {
+                if (updateFrameId) cancelAnimationFrame(updateFrameId);
+                updateFrameId = requestAnimationFrame(() => {
+                    updateFrameId = null;
+                    renderChartsFromMap();
+                });
+            }
+
+            let liveRef = null;
+
+            function startLiveSync() {
+                if (liveRef) {
+                    liveRef.off();
+                }
+
+                // 폰 메모리에 있는 마지막 타임스탬프 바로 다음부터만 요청 (스마트 오프셋 동기화)
+                const query = lastSeenTs
+                    ? db.ref(`pc_history/${pcId}`).orderByKey().startAt(String(Number(lastSeenTs) + 1))
+                    : db.ref(`pc_history/${pcId}`).orderByKey().limitToLast(1);
+
+                liveRef = query;
+                liveRef.on('child_added', (childSnap) => {
+                    const ts = childSnap.key;
+                    if (lastSeenTs && ts <= lastSeenTs) return;
+                    lastSeenTs = ts;
+                    historyMap[ts] = childSnap.val();
+
+                    // 메모리 절약을 위해 360개 초과 시 가장 오래된 것 제거
+                    const keys = Object.keys(historyMap);
+                    if (keys.length > MAX_POINTS + 20) {
+                        const sorted = keys.sort();
+                        const removeCount = sorted.length - MAX_POINTS;
+                        for (let i = 0; i < removeCount; i++) {
+                            delete historyMap[sorted[i]];
+                        }
+                    }
+
+                    scheduleChartRender();
+                });
+            }
+
+            // 최초 1회: 최근 360개 한 번만 가져와서 메모리에 적재 후 실시간 증분 동기화 시작
+            function fetchInitialHistory() {
+                db.ref(`pc_history/${pcId}`).orderByKey().limitToLast(MAX_POINTS).once('value', (snapshot) => {
+                    const data = snapshot.val();
+                    if (data) {
+                        const keys = Object.keys(data).sort();
+                        keys.forEach(k => {
+                            historyMap[k] = data[k];
+                        });
+                        if (keys.length > 0) {
+                            lastSeenTs = keys[keys.length - 1];
+                        }
+                        scheduleChartRender();
+                    }
+                    startLiveSync();
+                });
+            }
+
+            fetchInitialHistory();
+
+            // 백그라운드 복귀 또는 오랜 시간 절전 후 켰을 때(10분 이상 공백) 안전 재동기화
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    const nowSec = Math.floor(Date.now() / 1000);
+                    if (lastSeenTs && (nowSec - Number(lastSeenTs)) > 600) {
+                        // 10분 이상 자리를 비웠던 경우 깨끗하게 최신 360개로 리프레시
+                        fetchInitialHistory();
+                    }
+                }
             });
         }
 
